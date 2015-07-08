@@ -14,9 +14,6 @@ namespace sqlite {
         $dbo->exec("create table if not exists histories (id integer primary key autoincrement, action text, version_id integer, created_at timestamp default current_timestamp)");
 
         $folder = ROOT_PATH . '/db/migrate';
-        if (!file_exists($folder)) {
-            mkdir($folder, 0777, true);
-        }
         foreach (glob("{$folder}/*.php") as $migrate) {
             list($timestamp, $action, $target, $name) = explode("_", basename($migrate, ".php"), 4);
             $list = date_parse_from_format("YmdHis", $timestamp);
@@ -234,6 +231,10 @@ namespace {
 
 if (count($argv) > 1) {
     define('ROOT_PATH', dirname(__DIR__));
+    if (!file_exists(ROOT_PATH . '/db/migrate')) {
+        mkdir(ROOT_PATH . '/db/migrate', 0777, true);
+    }
+
     require_once(ROOT_PATH . '/app/helpers/application_helper.php');
 
     $fn = "{$argv[1]}\\{$argv[2]}";
