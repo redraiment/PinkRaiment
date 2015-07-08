@@ -131,7 +131,7 @@ class ApplicationController {
     public function page_not_found() {
         $this->has_rendered = true;
         http_response_code(404);
-        require_once(RAILS_PATH . '/public/static/404.html');
+        require_once(ROOT_PATH . '/public/static/404.html');
         exit();
     }
 
