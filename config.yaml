@@ -1,0 +1,30 @@
+name: calendary
+version: 2
+
+handle:
+
+# GET
+
+## index
+- rewrite: if (path ~ "^/?$" && %{REQUEST_METHOD} == "GET") goto "/controller.php?_controller=home&_action=index&format=html&%{QUERY_STRING}"
+- rewrite: if (path ~ "^/([a-z_]+)(?:\.(json|xml|html))?/?$" && %{REQUEST_METHOD} == "GET") goto "/controller.php?_controller=$1&_action=index&format=$2&%{QUERY_STRING}"
+
+## add
+- rewrite: if (path ~ "^/([a-z_]+)/add(?:\.(json|xml|html))?/?$" && %{REQUEST_METHOD} == "GET") goto "/controller.php?_controller=$1&_action=add&format=$2&%{QUERY_STRING}"
+
+## show
+- rewrite: if (path ~ "^/([a-z_]+)/(\d+)(?:\.(json|xml|html))?/?$" && %{REQUEST_METHOD} == "GET") goto "/controller.php?_controller=$1&_action=show&id=$2&format=$3&%{QUERY_STRING}"
+
+## edit
+- rewrite: if (path ~ "^/([a-z_]+)/(\d+)/edit(?:\.(json|xml|html))?/?$" && %{REQUEST_METHOD} == "GET") goto "/controller.php?_controller=$1&_action=edit&id=$2&format=$3&%{QUERY_STRING}"
+
+# POST
+
+## create
+- rewrite: if (path ~ "^/([a-z_]+)(?:\.(json|xml|html))?/?$" && %{REQUEST_METHOD} == "POST") goto "/controller.php?_controller=$1&_action=create&format=$2&%{QUERY_STRING}"
+
+## update
+- rewrite: if (path ~ "^/([a-z_]+)/(\d+)(?:\.(json|xml|html))?/?$" && %{REQUEST_METHOD} == "POST") goto "/controller.php?_controller=$1&_action=update&id=$2&format=$3&%{QUERY_STRING}"
+
+## destroy
+- rewrite: if (path ~ "^/([a-z_]+)/(\d+)/destroy(?:\.(json|xml|html))?/?$" && %{REQUEST_METHOD} == "POST") goto "/controller.php?_controller=$1&_action=destroy&id=$2&format=$3&%{QUERY_STRING}"
