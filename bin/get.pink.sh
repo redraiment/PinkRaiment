@@ -10,6 +10,7 @@ mv phpActiveRecord app/models
 rm -rf app/models/.git* app/models/*test* app/models/zombie.php app/models/README.md
 
 echo 'bin/' > .gitignore
+echo 'db/versions.sqlite3' >> .gitignore
 rm -rf .git README.md
 git init
 git add .
