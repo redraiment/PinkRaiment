@@ -9,6 +9,9 @@ error_reporting(E_ALL);
 // global settings
 
 date_default_timezone_set('PRC');
+if (file_exists(__DIR__ . '/database.php')) {
+    require_once(__DIR__ . '/database.php');
+}
 
 // routes
 require_once(__DIR__ . '/routes.php');
