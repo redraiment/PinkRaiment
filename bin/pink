@@ -1,0 +1,268 @@
+#!/usr/bin/env php
+<?php
+
+namespace sqlite {
+    function synchronize($dbo) {
+        static $is_synchronized = false;
+        if ($is_synchronized) {
+            return;
+        } else {
+            $is_synchronized = true;
+        }
+
+        $dbo->exec("create table if not exists versions (id integer primary key autoincrement, action text, target text, name text, created_at timestamp default current_timestamp)");
+        $dbo->exec("create table if not exists histories (id integer primary key autoincrement, action text, version_id integer, created_at timestamp default current_timestamp)");
+
+        $folder = ROOT_PATH . '/db/migrate';
+        if (!file_exists($folder)) {
+            mkdir($folder, 0777, true);
+        }
+        foreach (glob("{$folder}/*.php") as $migrate) {
+            list($timestamp, $action, $target, $name) = explode("_", basename($migrate, ".php"), 4);
+            $list = date_parse_from_format("YmdHis", $timestamp);
+            $timestamp = sprintf('%04s-%02s-%02s %02s:%02s:%02s', $list['year'], $list['month'], $list['day'], $list['hour'], $list['minute'], $list['second']);
+
+            $has_inserted = value('select count(id) from versions where action = ? and target = ? and name = ? and created_at = ?', $action, $target, $name, $timestamp);
+            if (intval($has_inserted) === 0) {
+                execute('insert into versions (action, target, name, created_at) values (?, ?, ?, ?)', $action, $target, $name, $timestamp);
+            }
+        }
+    }
+
+    function with_connect($fn) {
+        $filename = ROOT_PATH . '/db/versions.sqlite3';
+        $dbo = new \PDO("sqlite:{$filename}");
+        synchronize($dbo);
+        return $fn($dbo);
+    }
+
+    function execute($sql, ...$parameters) {
+        return with_connect(function($dbo) use ($sql, $parameters) {
+            $call = $dbo->prepare($sql);
+            $call->execute($parameters);
+            return $dbo->lastInsertId();
+        });
+    }
+
+    function query($sql, ...$parameters) {
+        return with_connect(function($dbo) use ($sql, $parameters) {
+            $call = $dbo->prepare($sql);
+            $call->execute($parameters);
+            return $call->fetchAll();
+        });
+    }
+
+    function one($sql, ...$parameters) {
+        $rows = query($sql, ...$parameters);
+        return (count($rows) > 0)? $rows[0]: null;
+    }
+
+    function value($sql, ...$parameters) {
+        $row = one($sql, ...$parameters);
+        return ($row !== null && count($row) > 0)? $row[0]: null;
+    }
+
+    function commit($action, $target, $name) {
+        $id = execute('insert into versions (action, target, name) values (?, ?, ?)', $action, $target, $name);
+        return value("select strftime('%Y%m%d%H%M%S', created_at) from versions where id = ?", $id);
+    }
+
+    // current version
+    function version($action) {
+        $version = value('select version_id from histories where action = ? order by id desc limit 1', $action);
+        return ($version === null)? 0: $version;
+    }
+
+    function remmember($action, $version) {
+        execute('insert into histories (action, version_id) values (?, ?)', $action, $version);
+    }
+}
+
+namespace db {
+    // private
+    function connect() {
+        $filename = ROOT_PATH . '/config/database.php';
+        if (!file_exists($filename)) {
+            echo "Error: file `config/database.php' does not exists.\n";
+            echo "Please specify database information in `config/database.php'\n";
+            exit;
+        }
+        require_once($filename);
+        return \DB::open("{$DATABASE['driver']}:host={$DATABASE['host']};dbname={$DATABASE['database']};", $DATABASE['user'], $DATABASE['password']);
+    }
+
+    // public
+    function migrations() {
+        $current_version_id = \sqlite\version('migrate');
+        $versions = \sqlite\query('select * from versions where target != \'seed\' order by id');
+        foreach ($versions as $version) {
+            echo ($version['id'] === $current_version_id)? '*': ' ';
+            echo "{$version['id']}. {$version['action']} {$version['target']} {$version['name']} @ {$version['created_at']}\n";
+        }
+    }
+
+    function migrate($version = null) {
+        if ($version === null) {
+            $version = \sqlite\version('migrate');
+        }
+        require_once(ROOT_PATH . '/app/models/activerecord.php');
+        $db = connect();
+
+        $folder = ROOT_PATH . '/db/migrate';
+        $migrations = \sqlite\query("select id, action, target, name, strftime('%Y%m%d%H%M%S', created_at) as created_at from versions where id > ? and target != 'seed' order by id", $version);
+        foreach ($migrations as $migration) {
+            $filename = "{$folder}/{$migration['created_at']}_{$migration['action']}_{$migration['target']}_{$migration['name']}.php";
+            if (file_exists($filename)) {
+                require($filename);
+                \sqlite\remmember('migrate', $migration['id']);
+            }
+        }
+    }
+
+    function seeds() {
+        $current_version_id = \sqlite\version('seed');
+        $versions = \sqlite\query('select * from versions where target = \'seed\' order by id');
+        foreach ($versions as $version) {
+            echo ($version['id'] === $current_version_id)? '*': ' ';
+            echo "{$version['id']}. {$version['action']} {$version['target']} {$version['name']} @ {$version['created_at']}\n";
+        }
+    }
+
+    function seed($version = null) {
+        if ($version === null) {
+            $version = \sqlite\version('seed');
+        }
+        require_once(ROOT_PATH . '/app/models/activerecord.php');
+        $db = connect();
+
+        $folder = ROOT_PATH . '/db';
+        $models_path = "{$folder}/models.php";
+        if (file_exists($models_path)) {
+            require_once($models_path);
+        }
+        $relations_path = "{$folder}/relations.php";
+        if (file_exists($relations_path)) {
+            require_once($relations_path);
+        }
+
+        $migrations = \sqlite\query("select id, action, target, name, strftime('%Y%m%d%H%M%S', created_at) as created_at from versions where id > ? and target = 'seed' order by id", $version);
+        foreach ($migrations as $migration) {
+            $filename = "{$folder}/migrate/{$migration['created_at']}_{$migration['action']}_{$migration['target']}_{$migration['name']}.php";
+            if (file_exists($filename)) {
+                require($filename);
+                \sqlite\remmember('seed', $migration['id']);
+            }
+        }
+    }
+}
+
+namespace app {
+    function with_model($fn) {
+        $models = [];
+        $filename = ROOT_PATH . '/db/models.php';
+        if (file_exists($filename)) {
+            $content = trim(file_get_contents($filename));
+            foreach (explode("\n", $content) as $line) {
+                if (preg_match('/^\$/', $line)) {
+                    list($model, $table) = explode(' = $db->', ltrim(rtrim($line, ';'), '$'), 2);
+                    $models[$model] = $table;
+                }
+            }
+        }
+        $models = $fn($models);
+        $content = '<?php';
+        foreach ($models as $model => $table) {
+            $content .= "\n\${$model} = \$db->{$table};";
+        }
+        file_put_contents($filename, $content);
+    }
+
+    function commit($action, $target, $name, $content) {
+        $timestamp = \sqlite\commit($action, $target, $name);
+        $filename = ROOT_PATH . "/db/migrate/{$timestamp}_{$action}_{$target}_{$name}.php";
+        file_put_contents($filename, $content);
+    }
+}
+
+namespace create {
+    function table($name, ...$columns) {
+        $sql = "<?php\n\$db->createTable('{$name}'";
+        $sql .= implode('', array_map(function($column) {
+            return ",\n  \"{$column}\"";
+        }, $columns));
+        $sql .= "\n);\n";
+        \app\commit('create', 'table', $name, $sql);
+    }
+
+    function model($name, ...$columns) {
+        $table_name = pluralize(String_downcase($name));
+        \app\with_model(function($models) use ($name, $table_name) {
+            $models[$name] = $table_name;
+            return $models;
+        });
+        table($table_name, ...$columns);
+    }
+
+    function seed($name) {
+        \app\commit('create', 'seed', $name, "<?php\n");
+    }
+}
+
+namespace drop {
+    function table($name) {
+        \app\commit('drop', 'table', $name, "<?php\n\$db->dropTable('{$name}');\n");
+    }
+
+    function model($name) {
+        \app\with_model(function($models) use ($name) {
+            unset($models[$name]);
+            return $models;
+        });
+        table(pluralize(String_downcase($name)));
+    }
+}
+
+namespace alter {
+    function table($name, ...$statements) {
+        $statement = str_replace(['\\', '\''], ['\\\\', '\\\''], implode(' ', $statements));
+        $sql = "<?php\n\$db->alterTable('{$name}', '{$statement}');\n";
+        \app\commit('alter', 'table', $name, $sql);
+    }
+}
+
+namespace {
+
+if (count($argv) > 1) {
+    define('ROOT_PATH', dirname(__DIR__));
+    require_once(ROOT_PATH . '/app/helpers/application_helper.php');
+
+    $fn = "{$argv[1]}\\{$argv[2]}";
+    $fn(...array_slice($argv, 3));
+} else {
+    echo <<<HELP
+Usage: pink <sub-command> <task> [parameters...]
+
+* db migrations   - list available migration versions
+* db migrate [n]  - executes migrate from current version to the latest
+* db seeds        - list available meta data seeds versions
+* db seed [n]     - executes seed from current version to the latest
+
+* create model <CamelCaseModelName> [columns...]
+                  - create table & insert model define into models.php
+* create table <underscore_table_name> [columns...]
+                  - create table with columns
+* create seed <name>
+                  - create seed file under db/migrate
+
+* drop model <CamelCaseModelName>
+                  - create drop model migration
+* drop table <underscore_table_name>
+                  - create drop table migration
+
+* alter table     - create alter table migration
+
+
+HELP;
+}
+
+}
