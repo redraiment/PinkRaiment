@@ -1,0 +1,3 @@
+app/models
+config/database*
+db/versions.sqlite3
