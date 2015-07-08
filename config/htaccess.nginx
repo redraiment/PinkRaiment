@@ -1,0 +1,42 @@
+server {
+    listen 80;
+    server_name localhost;
+    # root {your website root};
+    charset utf-8;
+    error_page 404 /public/static/404.html;
+    client_max_body_size 100M;
+
+    location ~* \.(?:png|gif|jpg|js|css)$ {
+        expires 1d;
+    }
+
+    location = /app/controllers/application_controller.php {
+       fastcgi_pass unix:/var/run/php5-fpm.sock;
+       fastcgi_param SCRIPT_FILENAME  $document_root$fastcgi_script_name;
+       include fastcgi_params;
+    }
+
+    if ($request_method = GET) {
+        rewrite ^/?$ /app/controllers/application_controller.php?_controller=home&_action=index break;
+
+        rewrite ^/([a-z_]+)(?:\.(json|xml|html))?/?$ /app/controllers/application_controller.php?_controller=$1&_action=index&format=$2 break;
+        rewrite ^/([a-z_]+)/add/?$ /app/controllers/application_controller.php?_controller=$1&_action=add break;
+        rewrite ^/([a-z_]+)/(\d+)(?:\.(json|xml|html))?/?$ /app/controllers/application_controller.php?_controller=$1&_action=show&id=$2&format=$3 break;
+        rewrite ^/([a-z_]+)/(\d+)/edit/?$ /app/controllers/application_controller.php?_controller=$1&_action=edit&id=$2 break;
+        rewrite ^/([a-z_]+)/edit/?$ /app/controllers/application_controller.php?_controller=$1&_action=edit break;
+    }
+
+    if ($request_method = POST) {
+        rewrite ^/callbacks/([a-z]+)/?$ /app/controllers/application_controller.php?_controller=callbacks&_action=create&code=$1 break;
+
+        rewrite ^/([a-z_]+)(?:\.(json|xml|html))?/?$ /app/controllers/application_controller.php?_controller=$1&_action=create&format=$2 break;
+        rewrite ^/([a-z_]+)/(\d+)(?:\.(json|xml|html))?/?$ /app/controllers/application_controller.php?_controller=$1&_action=update&id=$2&format=$3 break;
+    }
+
+    rewrite ^/([a-z_]+)/(\d+)/destroy(?:\.(json|xml|html))?/?$ /app/controllers/application_controller.php?_controller=$1&_action=destroy&id=$2&format=$3 break;
+    rewrite ^/([a-z_]+)/destroy(?:\.(json|xml|html))?/?$ /app/controllers/application_controller.php?_controller=$1&_action=destroy&format=$2 break;
+
+    location ~* ^/(?:app|config|logs)/? {
+        deny all;
+    }
+}
