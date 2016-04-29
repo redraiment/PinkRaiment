@@ -13,7 +13,11 @@ function vendor($path) {
 // logger
 
 function logger($message) {
-    $filename = ROOT_PATH . '/logs/' . date('Ymd') . '.log';
+    $dirname = ROOT_PATH . '/logs';
+    if (!file_exists($dirname)) {
+        mkdir($dirname, 0777, true);
+    }
+    $filename = $dirname . '/' . date('Ymd') . '.log';
     file_put_contents($filename, date('[H:i:s]') . $message . "\n", FILE_APPEND);
 }
 
