@@ -192,7 +192,7 @@ namespace create {
     }
 
     function model($name, ...$columns) {
-        $table_name = pluralize(String_downcase($name));
+        $table_name = pluralize(String_underscore($name));
         \app\with_model(function($models) use ($name, $table_name) {
             $models[$name] = $table_name;
             return $models;
