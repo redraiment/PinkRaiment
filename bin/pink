@@ -227,6 +227,26 @@ namespace alter {
     }
 }
 
+namespace task {
+    function run($name, ...$arguments) {
+        // global settings
+        ini_set('display_errors', true);
+        error_reporting(E_ALL);
+        date_default_timezone_set('PRC');
+        set_error_handler(function($id, $message, $file, $line) {
+            logger(sprintf('%s|%s|%s|%s', $id, $file, $line, $message));
+            throw new \ErrorException($message, $id, 0, $file, $line);
+        });
+
+        if (file_exists(ROOT_PATH . '/config/database.php')) {
+            require_once(ROOT_PATH . '/config/database.php');
+            require_once(ROOT_PATH . '/app/models/activerecord.php');
+        }
+
+        require_once(ROOT_PATH . '/app/tasks/' . $name . '.php');
+    }
+}
+
 namespace {
 
 if (count($argv) > 1) {
@@ -262,6 +282,8 @@ Usage: pink <sub-command> <task> [parameters...]
 
 * alter table     - create alter table migration
 
+* task run <name> [arguments...]
+                  - executes specified task
 
 HELP;
 }
