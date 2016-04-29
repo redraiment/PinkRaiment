@@ -109,6 +109,8 @@ function Encode_url($var) {
             $result[Encode_url($key)] = Encode_url($value);
         }
         return $result;
+    } elseif (is_null($var) || is_bool($var) || is_numeric($var)) {
+        return $var;
     } else {
         return urlencode($var);
     }
