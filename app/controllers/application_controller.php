@@ -8,24 +8,8 @@ if (!(($request_method === 'GET' && in_array($_action, array('index', 'show', 'a
     exit();
 }
 
-require_once('../../config/application.php');
 require_once('../helpers/application_helper.php');
-
-if (isset($DATABASE)) {
-    require_once('../models/activerecord.php');
-    $db = DB::open("{$DATABASE['driver']}:host={$DATABASE['host']};port={$DATABASE['port']};dbname={$DATABASE['database']};", $DATABASE['user'], $DATABASE['password']);
-    if (file_exists(ROOT_PATH . '/db/models.php')) {
-        require_once(ROOT_PATH . '/db/models.php');
-    }
-    if (file_exists(ROOT_PATH . '/db/relations.php')) {
-        require_once(ROOT_PATH . '/db/relations.php');
-    }
-}
-
-set_error_handler(function($id, $message, $file, $line) {
-    logger(sprintf('%s|%s|%s|%s', $id, $file, $line, $message));
-    throw new ErrorException($message, $id, 0, $file, $line);
-});
+require_once('../../config/application.php');
 
 session_start();
 
