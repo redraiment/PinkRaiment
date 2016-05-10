@@ -4,7 +4,7 @@ server {
     # root {your website root};
     charset utf-8;
     error_page 404 /public/static/404.html;
-    client_max_body_size 100M;
+    client_max_body_size 10M;
 
     location ~* \.(?:png|gif|jpg|js|css)$ {
         expires 1d;
