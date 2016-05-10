@@ -76,22 +76,11 @@ namespace sqlite {
 }
 
 namespace db {
-    // private
-    function connect() {
-        $filename = ROOT_PATH . '/config/database.php';
-        if (!file_exists($filename)) {
-            echo "Error: file `config/database.php' does not exists.\n";
-            echo "Please specify database information in `config/database.php'\n";
-            exit;
-        }
-        require_once($filename);
-        return \DB::open("{$DATABASE['driver']}:host={$DATABASE['host']};dbname={$DATABASE['database']};", $DATABASE['user'], $DATABASE['password']);
-    }
 
     // public
     function migrations() {
         $current_version_id = \sqlite\version('migrate');
-        $versions = \sqlite\query('select * from versions where target != \'seed\' order by id');
+        $versions = \sqlite\query('select * from versions order by id');
         foreach ($versions as $version) {
             echo ($version['id'] === $current_version_id)? '*': ' ';
             echo "{$version['id']}. {$version['action']} {$version['target']} {$version['name']} @ {$version['created_at']}\n";
@@ -102,52 +91,15 @@ namespace db {
         if ($version === null) {
             $version = \sqlite\version('migrate');
         }
-        require_once(ROOT_PATH . '/app/models/activerecord.php');
-        $db = connect();
+        require_once(ROOT_PATH . '/config/application.php');
 
         $folder = ROOT_PATH . '/db/migrate';
-        $migrations = \sqlite\query("select id, action, target, name, strftime('%Y%m%d%H%M%S', created_at) as created_at from versions where id > ? and target != 'seed' order by id", $version);
+        $migrations = \sqlite\query("select id, action, target, name, strftime('%Y%m%d%H%M%S', created_at) as created_at from versions where id > ? order by id", $version);
         foreach ($migrations as $migration) {
             $filename = "{$folder}/{$migration['created_at']}_{$migration['action']}_{$migration['target']}_{$migration['name']}.php";
             if (file_exists($filename)) {
                 require($filename);
                 \sqlite\remmember('migrate', $migration['id']);
-            }
-        }
-    }
-
-    function seeds() {
-        $current_version_id = \sqlite\version('seed');
-        $versions = \sqlite\query('select * from versions where target = \'seed\' order by id');
-        foreach ($versions as $version) {
-            echo ($version['id'] === $current_version_id)? '*': ' ';
-            echo "{$version['id']}. {$version['action']} {$version['target']} {$version['name']} @ {$version['created_at']}\n";
-        }
-    }
-
-    function seed($version = null) {
-        if ($version === null) {
-            $version = \sqlite\version('seed');
-        }
-        require_once(ROOT_PATH . '/app/models/activerecord.php');
-        $db = connect();
-
-        $folder = ROOT_PATH . '/db';
-        $models_path = "{$folder}/models.php";
-        if (file_exists($models_path)) {
-            require_once($models_path);
-        }
-        $relations_path = "{$folder}/relations.php";
-        if (file_exists($relations_path)) {
-            require_once($relations_path);
-        }
-
-        $migrations = \sqlite\query("select id, action, target, name, strftime('%Y%m%d%H%M%S', created_at) as created_at from versions where id > ? and target = 'seed' order by id", $version);
-        foreach ($migrations as $migration) {
-            $filename = "{$folder}/migrate/{$migration['created_at']}_{$migration['action']}_{$migration['target']}_{$migration['name']}.php";
-            if (file_exists($filename)) {
-                require($filename);
-                \sqlite\remmember('seed', $migration['id']);
             }
         }
     }
@@ -182,13 +134,14 @@ namespace app {
 }
 
 namespace create {
-    function table($name, ...$columns) {
-        $sql = "<?php\n\$db->createTable('{$name}'";
+    function table($table_name, ...$columns) {
+        $name = String_camel_case(singularize($table_name));
+        $sql = "<?php\n\${$name} = \$db->createTable('{$table_name}'";
         $sql .= implode('', array_map(function($column) {
             return ",\n  \"{$column}\"";
         }, $columns));
         $sql .= "\n);\n";
-        \app\commit('create', 'table', $name, $sql);
+        \app\commit('create', 'table', $table_name, $sql);
     }
 
     function model($name, ...$columns) {
@@ -229,20 +182,7 @@ namespace alter {
 
 namespace task {
     function run($name, ...$arguments) {
-        // global settings
-        ini_set('display_errors', true);
-        error_reporting(E_ALL);
-        date_default_timezone_set('PRC');
-        set_error_handler(function($id, $message, $file, $line) {
-            logger(sprintf('%s|%s|%s|%s', $id, $file, $line, $message));
-            throw new \ErrorException($message, $id, 0, $file, $line);
-        });
-
-        if (file_exists(ROOT_PATH . '/config/database.php')) {
-            require_once(ROOT_PATH . '/config/database.php');
-            require_once(ROOT_PATH . '/app/models/activerecord.php');
-        }
-
+        require_once(ROOT_PATH . '/config/application.php');
         require_once(ROOT_PATH . '/app/tasks/' . $name . '.php');
     }
 }
@@ -265,8 +205,6 @@ Usage: pink <sub-command> <task> [parameters...]
 
 * db migrations   - list available migration versions
 * db migrate [n]  - executes migrate from current version to the latest
-* db seeds        - list available meta data seeds versions
-* db seed [n]     - executes seed from current version to the latest
 
 * create model <CamelCaseModelName> [columns...]
                   - create table & insert model define into models.php
